@@ -1,31 +1,0 @@
-INFO:     Started server process [67686]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8088 (Press CTRL+C to quit)
-[*] Analyzing: https://www.youtube.com/watch?v=Rr1Cdli5nE8
-[!] Falling back to yt-dlp...
-INFO:     127.0.0.1:59647 - "GET /info?url=https%3A%2F%2Fyoutu.be%2FRr1Cdli5nE8%3Fsi%3DHD8a07eB83FGiXGa HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59647 - "GET /start-download?url=https%3A%2F%2Fyoutu.be%2FRr1Cdli5nE8%3Fsi%3DHD8a07eB83FGiXGa&type=audio&itag= HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59647 - "GET /task-status/7b763d47-0362-4ef1-a9b2-eef37f0c3b3a HTTP/1.1" 200 OK
-[download]   0.0% of    4.34MiB at  Unknown B/s ETA Unknown[download]   0.1% of    4.34MiB at  Unknown B/s ETA Unknown[download]   0.2% of    4.34MiB at  Unknown B/s ETA Unknown[download]   0.3% of    4.34MiB at   12.67MiB/s ETA 00:00  [download]   0.7% of    4.34MiB at    3.15MiB/s ETA 00:01[download]   1.4% of    4.34MiB at    3.24MiB/s ETA 00:01[download]   2.9% of    4.34MiB at    4.72MiB/s ETA 00:00[download]   5.7% of    4.34MiB at    5.98MiB/s ETA 00:00[download]  11.5% of    4.34MiB at    8.77MiB/s ETA 00:00[download]  23.0% of    4.34MiB at   14.19MiB/s ETA 00:00[download]  46.1% of    4.34MiB at   22.69MiB/s ETA 00:00INFO:     127.0.0.1:59647 - "GET /task-status/7b763d47-0362-4ef1-a9b2-eef37f0c3b3a HTTP/1.1" 200 OK
-[download]  92.2% of    4.34MiB at   32.66MiB/s ETA 00:00[download] 100.0% of    4.34MiB at   31.41MiB/s ETA 00:00[download] 100% of    4.34MiB in 00:00:00 at 19.13MiB/s                                                         INFO:     127.0.0.1:59647 - "GET /task-status/7b763d47-0362-4ef1-a9b2-eef37f0c3b3a HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59647 - "GET /task-status/7b763d47-0362-4ef1-a9b2-eef37f0c3b3a HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59647 - "GET /task-status/7b763d47-0362-4ef1-a9b2-eef37f0c3b3a HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59647 - "GET /download-file/7b763d47-0362-4ef1-a9b2-eef37f0c3b3a?filename=Like%20That.mp3 HTTP/1.1" 200 OK
-[*] Analyzing: https://www.youtube.com/watch?v=Rr1Cdli5nE8
-[!] Falling back to yt-dlp...
-INFO:     127.0.0.1:60710 - "GET /info?url=https%3A%2F%2Fyoutu.be%2FRr1Cdli5nE8%3Fsi%3DHD8a07eB83FGiXGa HTTP/1.1" 200 OK
-[*] Analyzing: https://www.youtube.com/watch?v=Rr1Cdli5nE8
-[*] Analyzing: https://www.youtube.com/watch?v=Rr1Cdli5nE8
-[!] Falling back to yt-dlp...
-[!] Falling back to yt-dlp...
-INFO:     127.0.0.1:60920 - "GET /info?url=https%3A%2F%2Fyoutu.be%2FRr1Cdli5nE8%3Fsi%3DHD8a07eB83FGiXGa HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60919 - "GET /info?url=https%3A%2F%2Fyoutu.be%2FRr1Cdli5nE8%3Fsi%3DHD8a07eB83FGiXGa HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60919 - "GET /start-download?url=https%3A%2F%2Fyoutu.be%2FRr1Cdli5nE8%3Fsi%3DHD8a07eB83FGiXGa&type=video&itag= HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60919 - "GET /task-status/b78b415a-d624-4864-afa5-8b0607c9c9a9 HTTP/1.1" 200 OK
-[download]   0.0% of    7.69MiB at  Unknown B/s ETA Unknown[download]   0.0% of    7.69MiB at  Unknown B/s ETA Unknown[download]   0.1% of    7.69MiB at  Unknown B/s ETA Unknown[download]   0.2% of    7.69MiB at  Unknown B/s ETA Unknown[download]   0.4% of    7.69MiB at    2.96MiB/s ETA 00:02  [download]   0.8% of    7.69MiB at    3.02MiB/s ETA 00:02[download]   1.6% of    7.69MiB at    3.83MiB/s ETA 00:01[download]   3.2% of    7.69MiB at    5.76MiB/s ETA 00:01[download]   6.5% of    7.69MiB at    9.33MiB/s ETA 00:00[download]  13.0% of    7.69MiB at   15.34MiB/s ETA 00:00[download]  26.0% of    7.69MiB at   24.76MiB/s ETA 00:00[download]  52.0% of    7.69MiB at   16.25MiB/s ETA 00:00[download] 100.0% of    7.69MiB at   26.24MiB/s ETA 00:00[download] 100% of    7.69MiB in 00:00:00 at 22.37MiB/s                                                         [download]   0.0% of    4.14MiB at  Unknown B/s ETA Unknown[download]   0.1% of    4.14MiB at    1.85MiB/s ETA 00:02  [download]   0.2% of    4.14MiB at    3.60MiB/s ETA 00:01[download]   0.4% of    4.14MiB at    6.69MiB/s ETA 00:00[download]   0.7% of    4.14MiB at   12.07MiB/s ETA 00:00[download]   1.5% of    4.14MiB at   21.79MiB/s ETA 00:00[download]   3.0% of    4.14MiB at   39.69MiB/s ETA 00:00[download]   6.0% of    4.14MiB at   67.29MiB/s ETA 00:00[download]  12.1% of    4.14MiB at   78.33MiB/s ETA 00:00[download]  24.2% of    4.14MiB at   86.23MiB/s ETA 00:00[download]  48.3% of    4.14MiB at   76.52MiB/s ETA 00:00[download]  96.7% of    4.14MiB at   77.52MiB/s ETA 00:00[download] 100.0% of    4.14MiB at   74.26MiB/s ETA 00:00[download] 100% of    4.14MiB in 00:00:00 at 27.58MiB/s                                                         INFO:     127.0.0.1:60919 - "GET /task-status/b78b415a-d624-4864-afa5-8b0607c9c9a9 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60919 - "GET /task-status/b78b415a-d624-4864-afa5-8b0607c9c9a9 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60919 - "GET /download-file/b78b415a-d624-4864-afa5-8b0607c9c9a9?filename=Like%20That.mp4 HTTP/1.1" 200 OK
-[*] Analyzing: https://www.youtube.com/watch?v=Rr1Cdli5nE8
-[!] Falling back to yt-dlp...
-INFO:     127.0.0.1:61331 - "GET /info?url=https%3A%2F%2Fyoutu.be%2FRr1Cdli5nE8%3Fsi%3DHD8a07eB83FGiXGa HTTP/1.1" 200 OK
