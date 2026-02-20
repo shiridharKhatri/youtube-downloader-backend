@@ -1,4 +1,3 @@
-import yt_dlp
 import asyncio
 import os
 import ssl
@@ -63,64 +62,9 @@ class YouTubeDownloader:
                 }
         except: pass
 
-        # STEP 2: Heavy Fallback to yt-dlp (The "Tough" Player)
-        print(f"[!] Falling back to yt-dlp...")
-        try:
-            # FORCE SSL BYPASS specifically for this call
-            # This is extra insurance for local environments
-            import ssl
-            original_ctx = ssl._create_default_https_context
-            ssl._create_default_https_context = ssl._create_unverified_context
-            
-            try:
-                loop = asyncio.get_event_loop()
-                info = await loop.run_in_executor(None, self._extract_with_ytdlp, url)
-            finally:
-                # Restore original context just in case
-                ssl._create_default_https_context = original_ctx
-            
-            if info:
-                # Find the best combined format if url is missing
-                play_url = info.get("url")
-                if not play_url and "formats" in info:
-                    # Filter for formats that have both video and audio
-                    combined = [f for f in info["formats"] if f.get("acodec") != "none" and f.get("vcodec") != "none"]
-                    if combined:
-                        play_url = combined[-1].get("url") # Take the highest quality combined
-                
-                if play_url:
-                    return {
-                        "title": info.get("title", "YouTube Video"),
-                        "thumbnail": info.get("thumbnail"),
-                        "play": play_url,
-                        "quality": f"{info.get('height', '720')}p",
-                        "duration": str(info.get("duration", 0)),
-                        "engine": "yt-dlp"
-                    }
-        except Exception as e:
-            print(f"[ERROR] Extraction failed: {e}")
-        
+        # STEP 2: Strict Reverse Fallback (No yt-dlp)
+        # We rely on the reverse engine to handle all extraction.
+        # This completely removes the risk of yt-dlp specific IP blocks for metadata.
         return None
 
-    def _extract_with_ytdlp(self, url):
-        # Fresh options for Mac/Local bypass
-        opts = {
-            'nocheckcertificate': True,
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': False,
-            'noplaylist': True,
-            'socket_timeout': 10,
-            'legacy_server_connect': True, # Helps with some certificate chain issues
-            'user_agent': USER_AGENT,
-            'force_ipv4': True,
-        }
-        
-        # USE COOKIES IF PRESENT (To bypass VPS IP blocks)
-        cookie_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
-        if os.path.exists(cookie_path):
-            print(f"[Cookies] Using cookies from: {cookie_path}")
-            opts['cookiefile'] = cookie_path
-        
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            return ydl.extract_info(url, download=False)
+        return None

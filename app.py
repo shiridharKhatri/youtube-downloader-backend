@@ -7,7 +7,6 @@ import asyncio
 import os
 import uuid
 import tempfile
-import yt_dlp
 from typing import Optional
 from youtube_downloader import YouTubeDownloader, USER_AGENT
 
@@ -55,78 +54,64 @@ download_tasks = {}
 
 async def run_download_task(task_id: str, url: str, type_str: str, itag: Optional[str]):
     try:
-        def my_hook(d):
-            if d['status'] == 'downloading':
-                p = d.get('downloaded_bytes', 0)
-                t = d.get('total_bytes', 0) or d.get('total_bytes_estimate', 0)
-                if t > 0:
-                    download_tasks[task_id]["progress"] = round((p / t) * 100, 2)
-            elif d['status'] == 'finished':
-                download_tasks[task_id]["progress"] = 100
-                download_tasks[task_id]["status"] = "processing" # Usually merging or converting
-
+        # STEP 1: Get direct playable URL via Reverse Engine
+        info = await downloader.get_media_info(url)
+        if not info or not info.get("play"):
+            raise Exception("Could not retrieve a playable URL via Reverse Engineering.")
+        
+        play_url = info["play"]
         temp_dir = tempfile.gettempdir()
-        out_temp = os.path.join(temp_dir, f"{task_id}.%(ext)s")
         
-        opts = {
-            'outtmpl': out_temp,
-            'progress_hooks': [my_hook],
-            'nocheckcertificate': True,
-            'quiet': True,
-            'no_warnings': True,
-            'user_agent': USER_AGENT,
-            'force_ipv4': True,
-            # 'concurrent_fragment_downloads': 5, # aria2c level speed natively!
-        }
-
-        # USE COOKIES IF PRESENT (To bypass VPS IP blocks)
-        cookie_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
-        if os.path.exists(cookie_path):
-            print(f"[Cookies] Using cookies for download from: {cookie_path}")
-            opts['cookiefile'] = cookie_path
+        # Determine initial extension
+        ext = "mp4"
+        if ".m3u8" in play_url: ext = "ts"
         
-        if type_str == "audio":
-            opts['format'] = 'bestaudio/best'
-            opts['postprocessors'] = [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }]
-        else:
-            if itag and itag != "999" and itag != "null":
-                opts['format'] = f"{itag}+bestaudio/best"
-            else:
-                opts['format'] = "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4] / b"
-            opts['merge_output_format'] = 'mp4'
+        out_file = os.path.join(temp_dir, f"{task_id}_raw.{ext}")
+        final_file = os.path.join(temp_dir, f"{task_id}.{'mp3' if type_str == 'audio' else 'mp4'}")
 
-        def _download():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                return ydl.prepare_filename(info)
+        print(f"[*] Starting native download: {play_url[:60]}...")
+        
+        # STEP 2: Download the file using aiohttp
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+            async with session.get(play_url, headers={"User-Agent": USER_AGENT}) as resp:
+                if resp.status >= 400:
+                    raise Exception(f"Download stream returned status {resp.status}")
                 
-        loop = asyncio.get_event_loop()
-        final_file = await loop.run_in_executor(None, _download)
+                total_size = int(resp.headers.get('content-length', 0))
+                downloaded = 0
+                
+                with open(out_file, "wb") as f:
+                    async for chunk in resp.content.iter_chunked(1024 * 1024):
+                        if not chunk: break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            download_tasks[task_id]["progress"] = round((downloaded / total_size) * 100, 2)
+                        else:
+                            download_tasks[task_id]["progress"] = 50 # Indeterminate
+
+        download_tasks[task_id]["status"] = "processing"
         
-        # Extensions change after merging/conversion
-        base, ext = os.path.splitext(final_file)
+        # STEP 3: Post-processing (MP3 or MP4 check)
+        import subprocess
         if type_str == "audio":
-            if not os.path.exists(final_file) or ext != '.mp3':
-                # Check if .mp3 exists (postprocessors usually rename it)
-                if os.path.exists(base + '.mp3'):
-                    final_file = base + '.mp3'
-                else:
-                    # Some versions might keep both or have different naming
-                    # We'll trust the base + .mp3 for extraction
-                    final_file = base + '.mp3'
+            print(f"[*] Converting to MP3: {final_file}")
+            cmd = ["ffmpeg", "-y", "-i", out_file, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k", final_file]
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
-            if not os.path.exists(final_file) or ext != '.mp4':
-                if os.path.exists(base + '.mp4'):
-                    final_file = base + '.mp4'
-                else:
-                    final_file = base + '.mp4'
-            
+            # If it's already a good format, just rename, otherwise remux
+            if ext == "mp4":
+                os.rename(out_file, final_file)
+            else:
+                print(f"[*] Remuxing to MP4: {final_file}")
+                cmd = ["ffmpeg", "-y", "-i", out_file, "-c", "copy", final_file]
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Cleanup raw file
+        if os.path.exists(out_file): os.remove(out_file)
+        
         if not os.path.exists(final_file):
-            raise Exception(f"Final file not found: {final_file}")
+            raise Exception("Final file creation failed.")
 
         download_tasks[task_id]["status"] = "completed"
         download_tasks[task_id]["file"] = final_file
@@ -177,45 +162,25 @@ async def get_status():
 @app.get("/stream")
 async def stream_video(url: str, filename: Optional[str] = "video.mp4"):
     """
-    ULTRA-ROBUST Streaming using yt-dlp piping.
-    This bypasses all 403 Forbidden issues.
+    ULTRA-ROBUST Streaming using native proxying.
+    Bypasses all yt-dlp IP blocks.
     """
-    import subprocess
-    from youtube_downloader import USER_AGENT
+    # 1. Get the direct URL via reverse engine
+    info = await downloader.get_media_info(url)
+    if not info or not info.get("play"):
+        raise HTTPException(status_code=404, detail="Could not retrieve stream URL")
     
-    # We use a generator to pipe the stdout from yt-dlp
+    target_url = info["play"]
+    
     async def stream_generator():
-        # Build command for high speed piping
-        # -o - writes to stdout
-        cmd = [
-            "yt-dlp",
-            "--quiet",
-            "--no-warnings",
-            "--user-agent", USER_AGENT,
-            "--nocheckcertificate",
-            "--force-ipv4",
-            "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4] / b", # Best MP4
-            "-o", "-", # Stream to stdout
-            url
-        ]
-        
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        
-        try:
-            while True:
-                chunk = await proc.stdout.read(1024 * 1024) # 1MB chunks
-                if not chunk:
-                    break
-                yield chunk
-        except Exception as e:
-            print(f"[Streaming Error] {e}")
-        finally:
-            try: proc.kill()
-            except: pass
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+            try:
+                headers = {"User-Agent": USER_AGENT, "Range": "bytes=0-"}
+                async with session.get(target_url, headers=headers) as resp:
+                    async for chunk in resp.content.iter_chunked(1024 * 1024):
+                        yield chunk
+            except Exception as e:
+                print(f"[Streaming Error] {e}")
 
     return StreamingResponse(
         stream_generator(),
