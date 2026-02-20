@@ -115,5 +115,12 @@ class YouTubeDownloader:
             'user_agent': USER_AGENT,
             'force_ipv4': True,
         }
+        
+        # USE COOKIES IF PRESENT (To bypass VPS IP blocks)
+        cookie_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
+        if os.path.exists(cookie_path):
+            print(f"[Cookies] Using cookies from: {cookie_path}")
+            opts['cookiefile'] = cookie_path
+        
         with yt_dlp.YoutubeDL(opts) as ydl:
             return ydl.extract_info(url, download=False)

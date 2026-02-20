@@ -78,6 +78,12 @@ async def run_download_task(task_id: str, url: str, type_str: str, itag: Optiona
             'force_ipv4': True,
             # 'concurrent_fragment_downloads': 5, # aria2c level speed natively!
         }
+
+        # USE COOKIES IF PRESENT (To bypass VPS IP blocks)
+        cookie_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
+        if os.path.exists(cookie_path):
+            print(f"[Cookies] Using cookies for download from: {cookie_path}")
+            opts['cookiefile'] = cookie_path
         
         if type_str == "audio":
             opts['format'] = 'bestaudio/best'
