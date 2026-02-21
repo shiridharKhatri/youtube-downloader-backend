@@ -4,18 +4,30 @@ import json
 import os
 import traceback
 
-def get_proxy_connector():
-    warp_proxy = os.getenv("WARP_PROXY")
-    if warp_proxy:
-        try:
-            from aiohttp_socks import ProxyConnector
-            print(f"[Proxy] Routing via {warp_proxy}")
-            return ProxyConnector.from_url(warp_proxy, ssl=False)
-        except ImportError:
-            print("[Proxy] aiohttp_socks not installed. Ignoring WARP.")
-        except Exception as e:
-            print(f"[Proxy] Error configuring WARP: {e}")
-    return aiohttp.TCPConnector(ssl=False)
+import random
+
+class ProxyManager:
+    _proxies = []
+    
+    @classmethod
+    async def get_proxy(cls):
+        if not cls._proxies:
+            try:
+                print("[Proxy] Fetching fresh free proxy list from TheSpeedX...")
+                async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+                    async with session.get("https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt", timeout=10) as resp:
+                        if resp.status == 200:
+                            text = await resp.text()
+                            cls._proxies = [f"http://{line.strip()}" for line in text.split('\n') if line.strip()]
+                            random.shuffle(cls._proxies)
+                            print(f"[Proxy] Loaded {len(cls._proxies)} free HTTP proxies.")
+            except Exception as e:
+                print(f"[Proxy] Fetch error: {e}")
+        
+        if cls._proxies:
+            # Pop and return, or choose random
+            return random.choice(cls._proxies)
+        return None
 
 class YouTubeReverse:
     """
@@ -92,40 +104,53 @@ class YouTubeReverse:
                 except Exception as ce:
                     print(f"[Native] Cookie load error: {ce}")
 
-            async with aiohttp.ClientSession(connector=get_proxy_connector(), cookie_jar=jar) as session:
-                async with session.get(f"https://www.youtube.com/watch?v={video_id}", headers=headers, timeout=10) as resp:
-                    if resp.status != 200: return None
-                    html = await resp.text()
+            # Add 1 attempt without proxy, then 3 with proxy
+            test_proxies = [None]
+            for _ in range(3):
+                test_proxies.append(await ProxyManager.get_proxy())
 
-                    import re
-                    match = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html)
-                    if not match:
-                        match = re.search(r'var\s+ytInitialPlayerResponse\s*=\s*({.+?});', html)
-                    
-                    if match:
-                        data = json.loads(match.group(1))
-                        streaming_data = data.get("streamingData", {})
-                        formats = streaming_data.get("formats", []) + streaming_data.get("adaptiveFormats", [])
-                        
-                        best_url = None
-                        title = data.get("videoDetails", {}).get("title", "YT Video")
-                        thumb = data.get("videoDetails", {}).get("thumbnail", {}).get("thumbnails", [{}])[-1].get("url")
-                        
-                        formats = [f for f in formats if "url" in f]
-                        combined = sorted([f for f in formats if f.get("acodec") != "none" and f.get("vcodec") != "none"], 
-                                         key=lambda x: x.get("height", 0), reverse=True)
-                        
-                        best_f = combined[0] if combined else (sorted(formats, key=lambda x: x.get("height", 0), reverse=True)[0] if formats else None)
+            for proxy_url in test_proxies:
+                try:
+                    p_label = proxy_url if proxy_url else "DIRECT"
+                    print(f"[*] Trying Native Extraction via {p_label}")
+                    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False), cookie_jar=jar) as session:
+                        async with session.get(f"https://www.youtube.com/watch?v={video_id}", headers=headers, proxy=proxy_url, timeout=10) as resp:
+                            if resp.status != 200: continue
+                            html = await resp.text()
 
-                        if best_f:
-                            return {
-                                "title": title,
-                                "url": best_f["url"],
-                                "thumbnail": thumb,
-                                "quality": f"{best_f.get('height', '720')}p",
-                                "engine": "native-reverse"
-                            }
-        except: pass
+                            import re
+                            match = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html)
+                            if not match:
+                                match = re.search(r'var\s+ytInitialPlayerResponse\s*=\s*({.+?});', html)
+                            
+                            if match:
+                                data = json.loads(match.group(1))
+                                streaming_data = data.get("streamingData", {})
+                                formats = streaming_data.get("formats", []) + streaming_data.get("adaptiveFormats", [])
+                                
+                                best_url = None
+                                title = data.get("videoDetails", {}).get("title", "YT Video")
+                                thumb = data.get("videoDetails", {}).get("thumbnail", {}).get("thumbnails", [{}])[-1].get("url")
+                                
+                                formats = [f for f in formats if "url" in f]
+                                combined = sorted([f for f in formats if f.get("acodec") != "none" and f.get("vcodec") != "none"], 
+                                                key=lambda x: x.get("height", 0), reverse=True)
+                                
+                                best_f = combined[0] if combined else (sorted(formats, key=lambda x: x.get("height", 0), reverse=True)[0] if formats else None)
+
+                                if best_f:
+                                    return {
+                                        "title": title,
+                                        "url": best_f["url"],
+                                        "thumbnail": thumb,
+                                        "quality": f"{best_f.get('height', '720')}p",
+                                        "engine": "native-reverse"
+                                    }
+                except Exception as ex:
+                    print(f"[Native] Error on {p_label}: {ex}")
+                    continue
+        except Exception as e:
+            print(f"[Native] Outer Exception: {e}")
         return None
 
     async def _engine_piped(self, url):
