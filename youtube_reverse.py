@@ -1,6 +1,17 @@
 import asyncio
 import aiohttp
 import json
+import os
+
+def get_proxy_connector():
+    warp_proxy = os.getenv("WARP_PROXY")
+    if warp_proxy:
+        try:
+            from aiohttp_socks import ProxyConnector
+            return ProxyConnector.from_url(warp_proxy, ssl=False)
+        except ImportError:
+            pass
+    return aiohttp.TCPConnector(ssl=False)
 
 class YouTubeReverse:
     """
@@ -76,7 +87,7 @@ class YouTubeReverse:
                 except Exception as ce:
                     print(f"[Native] Cookie load error: {ce}")
 
-            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False), cookie_jar=jar) as session:
+            async with aiohttp.ClientSession(connector=get_proxy_connector(), cookie_jar=jar) as session:
                 async with session.get(f"https://www.youtube.com/watch?v={video_id}", headers=headers, timeout=10) as resp:
                     if resp.status != 200: return None
                     html = await resp.text()
@@ -119,8 +130,17 @@ class YouTubeReverse:
         video_id = self._extract_video_id(url)
         if not video_id: return None
         
-        instances = ["https://pipedapi.kavin.rocks", "https://api.piped.private.coffee", "https://pipedapi.moomoo.me"]
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+        instances = [
+            "https://pipedapi.kavin.rocks", 
+            "https://api.piped.private.coffee", 
+            "https://pipedapi.moomoo.me",
+            "https://piped.video",
+            "https://piped.tokhmi.xyz",
+            "https://pipedapi.smnz.de",
+            "https://pipedapi.adminforge.de",
+            "https://piped-api.garudalinux.org"
+        ]
+        async with aiohttp.ClientSession(connector=get_proxy_connector()) as session:
             for instance in instances:
                 try:
                     async with session.get(f"{instance}/streams/{video_id}", timeout=5) as resp:
@@ -146,8 +166,18 @@ class YouTubeReverse:
         video_id = self._extract_video_id(url)
         if not video_id: return None
         
-        instances = ["https://inv.tux.pizza", "https://yewtu.be", "https://vid.puffyan.us"]
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+        instances = [
+            "https://inv.tux.pizza", 
+            "https://yewtu.be", 
+            "https://vid.puffyan.us",
+            "https://invidious.nerdvpn.de",
+            "https://inv.nadeko.net",
+            "https://invidious.perennialte.ch",
+            "https://invidious.no-logs.com",
+            "https://invidious.jing.rocks",
+            "https://invidious.privacydev.net"
+        ]
+        async with aiohttp.ClientSession(connector=get_proxy_connector()) as session:
             for instance in instances:
                 try:
                     async with session.get(f"{instance}/api/v1/videos/{video_id}", timeout=5) as resp:
@@ -168,7 +198,7 @@ class YouTubeReverse:
 
     async def _engine_cobalt_v10(self, url):
         try:
-            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+            async with aiohttp.ClientSession(connector=get_proxy_connector()) as session:
                 payload = {"url": url}
                 headers = {"Accept": "application/json", "Content-Type": "application/json"}
                 async with session.post("https://api.cobalt.tools/", json=payload, headers=headers, timeout=5) as resp:
