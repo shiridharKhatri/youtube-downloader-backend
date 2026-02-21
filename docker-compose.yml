@@ -16,6 +16,7 @@ services:
       - "8088:8088"
     environment:
       - WARP_PROXY=socks5://warp:1080
+      - PYTHONUNBUFFERED=1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8088/"]
       interval: 30s

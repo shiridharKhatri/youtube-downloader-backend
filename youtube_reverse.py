@@ -145,7 +145,7 @@ class YouTubeReverse:
             "https://pipedapi.adminforge.de",
             "https://piped-api.garudalinux.org"
         ]
-        async with aiohttp.ClientSession(connector=get_proxy_connector()) as session:
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
             for instance in instances:
                 try:
                     async with session.get(f"{instance}/streams/{video_id}", timeout=5) as resp:
@@ -184,7 +184,7 @@ class YouTubeReverse:
             "https://invidious.jing.rocks",
             "https://invidious.privacydev.net"
         ]
-        async with aiohttp.ClientSession(connector=get_proxy_connector()) as session:
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
             for instance in instances:
                 try:
                     async with session.get(f"{instance}/api/v1/videos/{video_id}", timeout=5) as resp:
@@ -207,7 +207,7 @@ class YouTubeReverse:
 
     async def _engine_cobalt_v10(self, url):
         try:
-            async with aiohttp.ClientSession(connector=get_proxy_connector()) as session:
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
                 payload = {"url": url}
                 headers = {"Accept": "application/json", "Content-Type": "application/json"}
                 async with session.post("https://api.cobalt.tools/", json=payload, headers=headers, timeout=5) as resp:
