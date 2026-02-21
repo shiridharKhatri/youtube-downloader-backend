@@ -62,9 +62,5 @@ class YouTubeDownloader:
                 }
         except: pass
 
-        # STEP 2: Strict Reverse Fallback (No yt-dlp)
-        # We rely on the reverse engine to handle all extraction.
-        # This completely removes the risk of yt-dlp specific IP blocks for metadata.
-        return None
-
+        # STEP 2: Fallback already handled inside YouTubeReverse (which now includes yt-dlp)
         return None
