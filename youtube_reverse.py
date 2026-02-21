@@ -2,15 +2,19 @@ import asyncio
 import aiohttp
 import json
 import os
+import traceback
 
 def get_proxy_connector():
     warp_proxy = os.getenv("WARP_PROXY")
     if warp_proxy:
         try:
             from aiohttp_socks import ProxyConnector
+            print(f"[Proxy] Routing via {warp_proxy}")
             return ProxyConnector.from_url(warp_proxy, ssl=False)
         except ImportError:
-            pass
+            print("[Proxy] aiohttp_socks not installed. Ignoring WARP.")
+        except Exception as e:
+            print(f"[Proxy] Error configuring WARP: {e}")
     return aiohttp.TCPConnector(ssl=False)
 
 class YouTubeReverse:
@@ -36,6 +40,7 @@ class YouTubeReverse:
         
         for engine in engines:
             try:
+                print(f"[*] Trying reverse engine: {engine.__name__}")
                 result = await engine(url)
                 if result and result.get("url"):
                     return result
@@ -156,7 +161,9 @@ class YouTubeReverse:
                                     "quality": best.get("quality", "720p"),
                                     "engine": "piped-api"
                                 }
-                except: continue
+                except Exception as e:
+                    print(f"[Piped] Instance {instance} failed: {e}")
+                    continue
         return None
 
     async def _engine_invidious(self, url):
@@ -193,7 +200,9 @@ class YouTubeReverse:
                                     "quality": best.get("resolution", "720p"),
                                     "engine": "invidious-api"
                                 }
-                except: continue
+                except Exception as e:
+                    print(f"[Invidious] Instance {instance} failed: {e}")
+                    continue
         return None
 
     async def _engine_cobalt_v10(self, url):
@@ -206,5 +215,6 @@ class YouTubeReverse:
                         data = await resp.json()
                         if data.get("url"):
                             return {"title": "YT Video", "url": data.get("url"), "quality": "HD", "engine": "cobalt"}
-        except: pass
+        except Exception as e:
+            print(f"[Cobalt] Failed: {e}")
         return None
