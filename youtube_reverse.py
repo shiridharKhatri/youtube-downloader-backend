@@ -12,45 +12,39 @@ load_dotenv()
 
 class ProxyManager:
     _residential_proxy = os.getenv("PROXY_URL")
-    _proxies = []
 
     @classmethod
-    async def get_proxy(cls, type="residential"):
-        if type == "residential" and cls._residential_proxy:
-            return cls._residential_proxy
-        return None
+    async def get_proxy(cls):
+        return cls._residential_proxy if cls._residential_proxy else None
 
 class YouTubeReverse:
     """
     High-speed Reverse Engineered YouTube Engine.
-    Modified to prioritize functional public APIs.
+    Extremely robust against IP blocks using residential proxies and multi-api racing.
     """
     def __init__(self):
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Origin": "https://www.youtube.com",
-            "Referer": "https://www.youtube.com/",
-        }
+        self.user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+        ]
 
     async def fetch_video_info(self, url):
         """
-        Hyper-speed Resolution: Races ALL fast engines in parallel.
+        Races ALL fast engines in parallel with a longer timeout for robustness.
         """
-        # Define the race group
         fast_tasks = [
-            self._engine_cobalt(url),   # Turbo Speed (Reliable for Music)
-            self._engine_native(url),   # Direct HTML (High Quality)
-            self._engine_piped(url),    # API Proxy
-            self._engine_invidious(url),# API Proxy
-            self._engine_savefrom(url)  # Scraper
+            self._engine_cobalt(url),   
+            self._engine_native(url),   
+            self._engine_piped(url),    
+            self._engine_invidious(url),
+            self._engine_savefrom(url)  
         ]
         
         print(f"[*] Starting parallel race on {len(fast_tasks)} engines...")
         
-        # Parallel race: First one to succeed wins
-        for future in asyncio.as_completed(fast_tasks, timeout=10):
+        # Parallel race: First one to succeed wins. Timeout increased to 15s.
+        for future in asyncio.as_completed(fast_tasks, timeout=15):
             try:
                 result = await future
                 if result and result.get("url"):
@@ -59,7 +53,7 @@ class YouTubeReverse:
             except: continue
 
         # Heavy fallbacks (sequential)
-        print("[*] Fast engines failed. Starting heavy fallbacks...")
+        print("[*] All fast engines failed. Starting heavy fallbacks...")
         heavy_engines = [self._engine_ytdlp, self._engine_selenium]
         for engine in heavy_engines:
             try:
@@ -73,55 +67,54 @@ class YouTubeReverse:
 
     async def _engine_cobalt(self, url):
         """
-        ULTRA-FAST: Cobalt API (v10) - Excellent for Music & Restricted videos.
+        Races multiple Cobalt instances for reliability.
         """
-        api_url = "https://api.cobalt.tools/api/json"
-        # We try to hit the most reliable public endpoint
-        payload = {
-            "url": url,
-            "vQuality": "1080",
-            "aFormat": "mp3",
-            "isAudioOnly": False,
-            "isNoTTWatermark": True
-        }
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "User-Agent": self.headers["User-Agent"]
-        }
+        instances = [
+            "https://api.cobalt.tools/api/json",
+            "https://cobalt.shizuri.com/api/json", # Known reliable mirrors
+        ]
         
-        try:
-            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
-                async with session.post(api_url, json=payload, headers=headers, timeout=6) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("url"):
-                            return {
-                                "title": "YouTube Video",
-                                "url": data["url"],
-                                "thumbnail": None,
-                                "quality": "1080p",
-                                "width": 1920,
-                                "height": 1080,
-                                "engine": "cobalt-turbo"
-                            }
-        except: pass
+        async def _hit(api_url):
+            payload = {"url": url, "vQuality": "1080", "isAudioOnly": False}
+            headers = {"Accept": "application/json", "User-Agent": random.choice(self.user_agents)}
+            try:
+                async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+                    async with session.post(api_url, json=payload, headers=headers, timeout=8) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if data.get("url"):
+                                return {
+                                    "title": data.get("text", "YouTube Video"),
+                                    "url": data["url"],
+                                    "thumbnail": None,
+                                    "quality": "1080p", "width": 1920, "height": 1080,
+                                    "engine": f"cobalt-{api_url.split('/')[2]}"
+                                }
+            except: pass
+            return None
+
+        tasks = [_hit(inst) for inst in instances]
+        for f in asyncio.as_completed(tasks):
+            res = await f
+            if res: return res
         return None
 
     async def _engine_native(self, url):
+        """
+        Direct YouTube HTML extraction using Residential Proxy.
+        """
         video_id = self._extract_video_id(url)
         if not video_id: return None
+        proxy = await ProxyManager.get_proxy()
+        
         try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            }
-            jar = aiohttp.CookieJar()
-            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False), cookie_jar=jar) as session:
-                async with session.get(f"https://www.youtube.com/watch?v={video_id}", headers=headers, timeout=10) as resp:
+            headers = {"User-Agent": random.choice(self.user_agents)}
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+                async with session.get(f"https://www.youtube.com/watch?v={video_id}", headers=headers, proxy=proxy, timeout=10) as resp:
                     if resp.status != 200: return None
                     html = await resp.text()
-                    match = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html)
-                    if not match: match = re.search(r'var\s+ytInitialPlayerResponse\s*=\s*({.+?});', html)
+                    match = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html) or \
+                            re.search(r'var\s+ytInitialPlayerResponse\s*=\s*({.+?});', html)
                     if match:
                         data = json.loads(match.group(1))
                         streaming_data = data.get("streamingData", {})
@@ -131,14 +124,13 @@ class YouTubeReverse:
                                         key=lambda x: x.get("height", 0), reverse=True)
                         best_f = combined[0] if combined else (sorted(formats, key=lambda x: x.get("height", 0), reverse=True)[0] if formats else None)
                         if best_f:
-                            w, h = best_f.get("width"), best_f.get("height")
-                            if not w or not h: w, h = 1280, 720
                             return {
                                 "title": data.get("videoDetails", {}).get("title"),
                                 "url": best_f["url"],
                                 "thumbnail": data.get("videoDetails", {}).get("thumbnail", {}).get("thumbnails", [{}])[-1].get("url"),
                                 "quality": f"{best_f.get('height', '720')}p",
-                                "width": w, "height": h, "engine": "native-reverse"
+                                "width": best_f.get("width", 1280), "height": best_f.get("height", 720), 
+                                "engine": "native-reverse"
                             }
         except: pass
         return None
@@ -146,7 +138,7 @@ class YouTubeReverse:
     async def _engine_piped(self, url):
         video_id = self._extract_video_id(url)
         if not video_id: return None
-        instances = ["https://pipedapi.kavin.rocks", "https://api.piped.victr.me", "https://pipedapi.lunar.icu"]
+        instances = ["https://pipedapi.kavin.rocks", "https://api.piped.victr.me", "https://pipedapi.lunar.icu", "https://api-piped.mha.fi"]
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
             for instance in instances:
                 try:
@@ -161,7 +153,7 @@ class YouTubeReverse:
                                     "url": best["url"],
                                     "thumbnail": data.get("thumbnailUrl"),
                                     "quality": best.get("quality", "720p"),
-                                    "width": best.get("width"), "height": best.get("height"),
+                                    "width": best.get("width", 1280), "height": best.get("height", 720),
                                     "engine": "piped-api"
                                 }
                 except: continue
@@ -188,7 +180,7 @@ class YouTubeReverse:
     async def _engine_invidious(self, url):
         video_id = self._extract_video_id(url)
         if not video_id: return None
-        instances = ["https://inv.tux.pizza", "https://yewtu.be", "https://vid.puffyan.us"]
+        instances = ["https://inv.tux.pizza", "https://yewtu.be", "https://vid.puffyan.us", "https://inv.nadeko.net"]
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
             for instance in instances:
                 try:
@@ -197,20 +189,27 @@ class YouTubeReverse:
                             data = await resp.json()
                             streams = data.get("formatStreams", [])
                             if streams:
-                                best = sorted(streams, key=lambda x: int(x.get("resolution", "0").replace("p","")), reverse=True)[0]
+                                res_best = sorted(streams, key=lambda x: int(x.get("resolution", "0").replace("p","")), reverse=True)[0]
                                 return {
                                     "title": data.get("title"),
-                                    "url": best["url"],
+                                    "url": res_best["url"],
                                     "thumbnail": data.get("videoThumbnails", [{}])[0].get("url"),
-                                    "quality": best.get("resolution", "720p"),
+                                    "quality": res_best.get("resolution", "720p"),
                                     "width": 1280, "height": 720, "engine": "invidious-api"
                                 }
                 except: continue
         return None
 
     async def _engine_ytdlp(self, url):
+        """
+        yt-dlp fallback WITH proxy support to bypass VPS blocks.
+        """
+        proxy = await ProxyManager.get_proxy()
         def _extract():
-            with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
+            opts = {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True}
+            if proxy: opts['proxy'] = proxy
+            
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 formats = sorted([f for f in info.get('formats', []) if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('url')],
                                key=lambda x: x.get('height', 0), reverse=True)
@@ -221,14 +220,17 @@ class YouTubeReverse:
                         "url": best["url"],
                         "thumbnail": info.get("thumbnail"),
                         "quality": f"{best.get('height', '720')}p",
-                        "width": best.get("width"), "height": best.get("height"),
-                        "engine": "yt-dlp"
+                        "width": best.get("width", 1280), "height": best.get("height", 720),
+                        "engine": "yt-dlp-proxy" if proxy else "yt-dlp"
                     }
             return None
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _extract)
 
     async def _engine_selenium(self, url):
+        """
+        Ultimate fallback using Selenium.
+        """
         def _selenium_task():
             from selenium import webdriver
             from selenium.webdriver.chrome.options import Options
@@ -240,20 +242,21 @@ class YouTubeReverse:
             driver = webdriver.Chrome(options=chrome_options)
             try:
                 driver.get(url)
-                time.sleep(4)
+                time.sleep(5)
                 data_json = driver.execute_script("return JSON.stringify(window.ytInitialPlayerResponse);")
                 if data_json:
                     data = json.loads(data_json)
+                    vd = data.get("videoDetails", {})
                     formats = data.get("streamingData", {}).get("formats", []) + data.get("streamingData", {}).get("adaptiveFormats", [])
                     formats = [f for f in formats if "url" in f]
                     if formats:
                         best = sorted(formats, key=lambda x: x.get("height", 0), reverse=True)[0]
                         return {
-                            "title": data.get("videoDetails", {}).get("title"),
+                            "title": vd.get("title"),
                             "url": best["url"],
-                            "thumbnail": data.get("videoDetails", {}).get("thumbnail", {}).get("thumbnails", [{}])[-1].get("url"),
+                            "thumbnail": vd.get("thumbnail", {}).get("thumbnails", [{}])[-1].get("url"),
                             "quality": f"{best.get('height', '720')}p",
-                            "width": best.get("width"), "height": best.get("height"),
+                            "width": best.get("width", 1280), "height": best.get("height", 720),
                             "engine": "selenium"
                         }
             finally: driver.quit()
