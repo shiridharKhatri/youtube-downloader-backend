@@ -50,59 +50,82 @@ class YouTubeReverse:
         """
         Races multiple reverse engines to get the fastest valid link.
         """
-        engines = [
-            self._engine_native,      # Directly from YouTube HTML (Reverse) - FASTEST
-            self._engine_piped,       # Piped API Proxy - FAST
-            self._engine_invidious,   # Invidious API Proxy - FAST
-            self._engine_savefrom,    # SaveFrom (Very fast scraper) - FAST
-            self._engine_ytdlp,       # yt-dlp (Gold Standard, but slow) - FALLBACK
-            self._engine_selenium,    # Selenium (Heaviest, but most human-like) - LAST RESORT
+        # FASTEST engines (sequential or fast-fail)
+        fast_engines = [
+            self._engine_native,      # Directly from YouTube HTML (Reverse)
+            self._engine_savefrom,    # SaveFrom (Very fast scraper)
         ]
         
-        for engine in engines:
+        for engine in fast_engines:
             try:
-                print(f"[*] Trying reverse engine: {engine.__name__}")
+                print(f"[*] Trying FAST engine: {engine.__name__}")
+                result = await engine(url)
+                if result and result.get("url"):
+                    return result
+            except: continue
+
+        # Parallel race for API Proxies (Piped/Invidious) - Speed boost
+        print("[*] Racing Proxy APIs (Piped/Invidious)...")
+        proxy_engines = [self._engine_piped(url), self._engine_invidious(url)]
+        for future in asyncio.as_completed(proxy_engines, timeout=10):
+            try:
+                result = await future
+                if result and result.get("url"):
+                    return result
+            except: continue
+
+        # HEAVY fallbacks (sequential)
+        heavy_engines = [
+            self._engine_ytdlp,       # Gold Standard
+            self._engine_selenium,    # Last Resort
+        ]
+        
+        for engine in heavy_engines:
+            try:
+                print(f"[*] Trying HEAVY engine: {engine.__name__}")
                 result = await engine(url)
                 if result and result.get("url"):
                     return result
             except Exception as e:
                 print(f"[Reverse] {engine.__name__} failed: {e}")
                 continue
+                
         return None
 
     async def _engine_selenium(self, url):
         """
         LAST RESORT: Use Selenium to bypass complex JS blocks.
         """
-        # Run in executor because Selenium is blocking
         def _selenium_task():
             from selenium import webdriver
             from selenium.webdriver.chrome.options import Options
-            from selenium.webdriver.chrome.service import Service
-            from webdriver_manager.chrome import ChromeDriverManager
             import time
 
             chrome_options = Options()
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument(f"--user-agent={self.headers['User-Agent']}")
             
-            # Use Proxy if available
-            proxy = os.getenv("PROXY_URL")
-            if proxy:
-                # Selenium proxy format can be complex, for simplicity we skip it or use a basic one
-                # chrome_options.add_argument(f'--proxy-server={proxy}')
-                pass
-
             driver = None
             try:
                 driver = webdriver.Chrome(options=chrome_options)
+                # Set page load timeout to be safe
+                driver.set_page_load_timeout(20)
                 driver.get(url)
-                time.sleep(5) # Wait for JS
                 
-                # Try to extract ytInitialPlayerResponse
+                # Wait for player data to load
+                time.sleep(3)
+                
                 script = "return JSON.stringify(window.ytInitialPlayerResponse);"
                 data_json = driver.execute_script(script)
+                if not data_json:
+                    # Fallback search in HTML
+                    html = driver.page_source
+                    match = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?});', html)
+                    if match: data_json = match.group(1)
+
                 if data_json:
                     data = json.loads(data_json)
                     streaming_data = data.get("streamingData", {})
