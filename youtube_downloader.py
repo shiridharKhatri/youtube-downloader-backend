@@ -3,19 +3,6 @@ import os
 import ssl
 from youtube_reverse import YouTubeReverse
 
-# SSL Bypass for local environments/Mac
-os.environ['PYTHONHTTPSVERIFY'] = '0'
-try:
-    import certifi
-    os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
-    os.environ['SSL_CERT_FILE'] = certifi.where()
-except ImportError:
-    pass
-
-try:
-    ssl._create_default_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 

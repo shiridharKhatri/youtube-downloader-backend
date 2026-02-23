@@ -7,11 +7,18 @@ import random
 import yt_dlp
 import re
 
+from dotenv import load_dotenv
+load_dotenv()
+
 class ProxyManager:
+    _residential_proxy = os.getenv("PROXY_URL")
     _proxies = []
     
     @classmethod
-    async def get_proxy(cls):
+    async def get_proxy(cls, type="residential"):
+        if type == "residential" and cls._residential_proxy:
+            return cls._residential_proxy
+
         if not cls._proxies:
             try:
                 print("[Proxy] Fetching fresh free proxy list from TheSpeedX...")
@@ -26,9 +33,8 @@ class ProxyManager:
                 print(f"[Proxy] Fetch error: {e}")
         
         if cls._proxies:
-            # Pop and return, or choose random
             return random.choice(cls._proxies)
-        return None
+        return cls._residential_proxy
 
 class YouTubeReverse:
     """
@@ -107,8 +113,8 @@ class YouTubeReverse:
                 except Exception as ce:
                     print(f"[Native] Cookie load error: {ce}")
 
-            # Add 1 attempt without proxy, then 1 with proxy (to keep it fast)
-            test_proxies = [None, await ProxyManager.get_proxy()]
+            # Try residential proxy first, then direct
+            test_proxies = [await ProxyManager.get_proxy("residential"), None]
 
             for proxy_url in test_proxies:
                 try:
@@ -223,19 +229,12 @@ class YouTubeReverse:
         """
         High-performance yt-dlp library extraction with optional proxy.
         """
+        proxy_url = await ProxyManager.get_proxy("residential")
+        
         def _extract():
-            proxy = None
-            # Only use proxy if direct fails? Or always?
-            # Let's try direct first, then proxy
-            for p in [None, "SCRAPE"]:
+            # Try residential proxy first, then direct
+            for p in [proxy_url, None]:
                 try:
-                    proxy_url = None
-                    if p == "SCRAPE":
-                        # This is synchronous context, so we can't await ProxyManager here easily
-                        # Use a simpler way or pass it in. 
-                        # Let's just try direct for now as it worked in our test
-                        pass
-                    
                     ydl_opts = {
                         'quiet': True,
                         'no_warnings': True,
@@ -243,7 +242,11 @@ class YouTubeReverse:
                         'noplaylist': True,
                         'format': 'best[ext=mp4]/best',
                     }
-                    if proxy_url: ydl_opts['proxy'] = proxy_url
+                    if p: 
+                        ydl_opts['proxy'] = p
+                        print(f"[*] Trying yt-dlp via Proxy: {p[:30]}...")
+                    else:
+                        print("[*] Trying yt-dlp DIRECT...")
                     
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         info = ydl.extract_info(url, download=False)
@@ -255,7 +258,9 @@ class YouTubeReverse:
                                 "quality": f"{info.get('height', '720')}p",
                                 "engine": "yt-dlp"
                             }
-                except: continue
+                except Exception as e:
+                    print(f"[yt-dlp] Attempt failed: {e}")
+                    continue
             return None
 
         # Run in executor to avoid blocking

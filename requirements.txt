@@ -1,9 +1,8 @@
 fastapi==0.104.1
 uvicorn==0.24.0
-# Removed yt-dlp dependency
 aiohttp==3.9.1
 beautifulsoup4==4.12.2
 python-multipart==0.0.6
-certifi
 gunicorn==21.2.0
-aiohttp-socks==0.8.4    
+python-dotenv==1.1.0
+yt-dlp

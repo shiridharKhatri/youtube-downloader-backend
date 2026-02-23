@@ -8,25 +8,14 @@ import os
 import uuid
 import tempfile
 from typing import Optional
+from dotenv import load_dotenv
+load_dotenv()
+
 from youtube_downloader import YouTubeDownloader, USER_AGENT
 
 import os
 import ssl
 
-# LOCAL TEST FIX: Bypass SSL certificate verification for local development
-# This solves the "CERTIFICATE_VERIFY_FAILED" error on Mac/Windows
-os.environ['PYTHONHTTPSVERIFY'] = '0'
-try:
-    import certifi
-    os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
-    os.environ['SSL_CERT_FILE'] = certifi.where()
-except ImportError:
-    pass
-
-try:
-    ssl._create_default_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
 
 app = FastAPI(
     title="TikDown YouTube API",
@@ -72,8 +61,9 @@ async def run_download_task(task_id: str, url: str, type_str: str, itag: Optiona
         print(f"[*] Starting native download: {play_url[:60]}...")
         
         # STEP 2: Download the file using aiohttp
+        proxy = os.getenv("PROXY_URL")
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
-            async with session.get(play_url, headers={"User-Agent": USER_AGENT}) as resp:
+            async with session.get(play_url, headers={"User-Agent": USER_AGENT}, proxy=proxy) as resp:
                 if resp.status >= 400:
                     raise Exception(f"Download stream returned status {resp.status}")
                 
@@ -173,10 +163,11 @@ async def stream_video(url: str, filename: Optional[str] = "video.mp4"):
     target_url = info["play"]
     
     async def stream_generator():
+        proxy = os.getenv("PROXY_URL")
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
             try:
                 headers = {"User-Agent": USER_AGENT, "Range": "bytes=0-"}
-                async with session.get(target_url, headers=headers) as resp:
+                async with session.get(target_url, headers=headers, proxy=proxy) as resp:
                     async for chunk in resp.content.iter_chunked(1024 * 1024):
                         yield chunk
             except Exception as e:
@@ -224,11 +215,12 @@ async def proxy_media(url: str, filename: Optional[str] = "video.mp4"):
     
     async def stream_generator():
         # Specifically bypass SSL inside the proxy
+        proxy = os.getenv("PROXY_URL")
         connector = aiohttp.TCPConnector(ssl=False)
         async with aiohttp.ClientSession(connector=connector) as session:
             try:
                 # 1. Try with minimal headers
-                async with session.get(url, headers=headers) as resp:
+                async with session.get(url, headers=headers, proxy=proxy) as resp:
                     print(f"[Proxy] Response Status: {resp.status}")
                     
                     if resp.status == 403:
