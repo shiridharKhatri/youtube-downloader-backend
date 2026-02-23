@@ -51,11 +51,11 @@ class YouTubeReverse:
         Races multiple reverse engines to get the fastest valid link.
         """
         engines = [
-            self._engine_ytdlp,       # yt-dlp (Strongest, handles most blocks)
-            self._engine_savefrom,    # SaveFrom (Very fast scraper)
-            self._engine_native,      # Directly from YouTube HTML (Reverse)
-            self._engine_piped,       # Piped API Proxy
-            self._engine_invidious,   # Invidious API Proxy
+            self._engine_native,      # Directly from YouTube HTML (Reverse) - FASTEST
+            self._engine_piped,       # Piped API Proxy - FAST
+            self._engine_invidious,   # Invidious API Proxy - FAST
+            self._engine_savefrom,    # SaveFrom (Very fast scraper) - FAST
+            self._engine_ytdlp,       # yt-dlp (Gold Standard, but slow) - FALLBACK
         ]
         
         for engine in engines:
