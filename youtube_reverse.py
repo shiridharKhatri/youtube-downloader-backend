@@ -56,6 +56,7 @@ class YouTubeReverse:
             self._engine_invidious,   # Invidious API Proxy - FAST
             self._engine_savefrom,    # SaveFrom (Very fast scraper) - FAST
             self._engine_ytdlp,       # yt-dlp (Gold Standard, but slow) - FALLBACK
+            self._engine_selenium,    # Selenium (Heaviest, but most human-like) - LAST RESORT
         ]
         
         for engine in engines:
@@ -68,6 +69,63 @@ class YouTubeReverse:
                 print(f"[Reverse] {engine.__name__} failed: {e}")
                 continue
         return None
+
+    async def _engine_selenium(self, url):
+        """
+        LAST RESORT: Use Selenium to bypass complex JS blocks.
+        """
+        # Run in executor because Selenium is blocking
+        def _selenium_task():
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options
+            from selenium.webdriver.chrome.service import Service
+            from webdriver_manager.chrome import ChromeDriverManager
+            import time
+
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            
+            # Use Proxy if available
+            proxy = os.getenv("PROXY_URL")
+            if proxy:
+                # Selenium proxy format can be complex, for simplicity we skip it or use a basic one
+                # chrome_options.add_argument(f'--proxy-server={proxy}')
+                pass
+
+            driver = None
+            try:
+                driver = webdriver.Chrome(options=chrome_options)
+                driver.get(url)
+                time.sleep(5) # Wait for JS
+                
+                # Try to extract ytInitialPlayerResponse
+                script = "return JSON.stringify(window.ytInitialPlayerResponse);"
+                data_json = driver.execute_script(script)
+                if data_json:
+                    data = json.loads(data_json)
+                    streaming_data = data.get("streamingData", {})
+                    formats = streaming_data.get("formats", []) + streaming_data.get("adaptiveFormats", [])
+                    formats = [f for f in formats if "url" in f]
+                    
+                    if formats:
+                        best_f = sorted(formats, key=lambda x: x.get("height", 0), reverse=True)[0]
+                        return {
+                            "title": data.get("videoDetails", {}).get("title", "YT Video"),
+                            "url": best_f["url"],
+                            "thumbnail": data.get("videoDetails", {}).get("thumbnail", {}).get("thumbnails", [{}])[-1].get("url"),
+                            "quality": f"{best_f.get('height', '720')}p",
+                            "engine": "selenium-reverse"
+                        }
+            except Exception as e:
+                print(f"[Selenium] Error: {e}")
+            finally:
+                if driver: driver.quit()
+            return None
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _selenium_task)
 
     def _extract_video_id(self, url):
         import re
