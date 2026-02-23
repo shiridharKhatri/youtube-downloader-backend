@@ -14,7 +14,7 @@ class ProxyManager:
     _residential_proxy = os.getenv("PROXY_URL")
     _proxies = []
 
-    @cls
+    @classmethod
     async def get_proxy(cls, type="residential"):
         if type == "residential" and cls._residential_proxy:
             return cls._residential_proxy
