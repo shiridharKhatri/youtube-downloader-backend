@@ -24,7 +24,7 @@ class YouTubeDownloader:
             'noplaylist': True,    # CRITICAL: Ignore the playlist part of the URL
         }
 
-    async def get_media_info(self, url):
+    async def get_media_info(self, url, itag=None):
         """
         Main analysis entry point.
         """
@@ -37,7 +37,7 @@ class YouTubeDownloader:
         
         # STEP 1: Try Reverse Engines (Fast & Lightweight)
         try:
-            media = await self.reverse_engine.fetch_video_info(url)
+            media = await self.reverse_engine.fetch_video_info(url, itag=itag)
             if media and media.get("url"):
                 print(f"[+] Success using {media['engine']}!")
                 return {

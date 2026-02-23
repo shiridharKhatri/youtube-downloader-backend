@@ -32,7 +32,7 @@ class YouTubeReverse:
             "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1"
         ]
 
-    async def fetch_video_info(self, url):
+    async def fetch_video_info(self, url, itag=None):
         """
         Ultimate Parallel Race: Engines compete for the fastest response.
         """
@@ -45,7 +45,7 @@ class YouTubeReverse:
             self._engine_piped(url),    # API Loop
             self._engine_invidious(url),# API Loop
             self._engine_savefrom(url), # External Scraper
-            self._engine_ytdlp(url, use_proxy=True) # Resi yt-dlp
+            self._engine_ytdlp(url, use_proxy=True, itag=itag) # Resi yt-dlp
         ]
         
         # Racer Loop: First valid response wins.
@@ -210,17 +210,28 @@ class YouTubeReverse:
         except: pass
         return None
 
-    async def _engine_ytdlp(self, url, use_proxy=True):
+    async def _engine_ytdlp(self, url, use_proxy=True, itag=None):
         proxy = await ProxyManager.get_proxy() if use_proxy else None
         def _extract():
             opts = {'quiet': True, 'no_warnings': True, 'nocheckcertificate': True}
             if proxy: opts['proxy'] = proxy
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-                formats = sorted([f for f in info.get('formats', []) if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('url')],
-                               key=lambda x: x.get('height', 0), reverse=True)
-                if formats:
-                    best = formats[0]
+                formats = [f for f in info.get('formats', []) if f.get('url')]
+                
+                best = None
+                if itag:
+                    # Look for specific itag
+                    best = next((f for f in formats if str(f.get('format_id')) == str(itag)), None)
+                
+                if not best:
+                    # Filter for combined formats (video+audio) sort by height
+                    playable = sorted([f for f in formats if f.get('vcodec') != 'none' and f.get('acodec') != 'none'],
+                                   key=lambda x: x.get('height', 0), reverse=True)
+                    if playable:
+                        best = playable[0]
+                
+                if best:
                     return {
                         "title": info.get("title"),
                         "url": best["url"],

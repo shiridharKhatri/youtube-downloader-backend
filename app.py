@@ -44,7 +44,8 @@ download_tasks = {}
 async def run_download_task(task_id: str, url: str, type_str: str, itag: Optional[str]):
     try:
         # STEP 1: Get direct playable URL via Reverse Engine
-        info = await downloader.get_media_info(url)
+        # Support itag if provided
+        info = await downloader.get_media_info(url, itag=itag)
         if not info or not info.get("play"):
             raise Exception("Could not retrieve a playable URL.")
         
@@ -231,57 +232,43 @@ async def proxy_media(url: str, filename: Optional[str] = "video.mp4"):
     """
     High-performance Streaming Proxy with logging.
     """
-    from youtube_downloader import USER_AGENT
-    print(f"[*] Proxying request for: {url[:100]}...")
+    # Sanitize naming
+    safe_filename = "".join([c for c in filename if c.isalnum() or c in "._- "]).strip()
+    if not safe_filename: safe_filename = "download.mp4"
     
-    # Minimal headers often work better for direct video URLs
+    print(f"[*] Proxy Process: {url[:60]}... -> {safe_filename}")
+    
     headers = {
         "User-Agent": USER_AGENT,
         "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Range": "bytes=0-", # Force start
+        "Range": "bytes=0-",
     }
     
     async def stream_generator():
-        # Specifically bypass SSL inside the proxy
         proxy = os.getenv("PROXY_URL")
-        connector = aiohttp.TCPConnector(ssl=False)
-        async with aiohttp.ClientSession(connector=connector) as session:
+        # Use a single connector for efficiency
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
             try:
-                # 1. Try with minimal headers
-                async with session.get(url, headers=headers, proxy=proxy) as resp:
-                    print(f"[Proxy] Response Status: {resp.status}")
-                    
+                async with session.get(url, headers=headers, proxy=proxy, timeout=60) as resp:
+                    print(f"[Proxy] Response: {resp.status}")
                     if resp.status == 403:
-                        print("[Proxy] 403 Forbidden - Retrying with strictly minimal headers...")
+                        print("[Proxy] 403 - Trying Direct fallback...")
                         async with session.get(url, headers={"User-Agent": USER_AGENT}) as resp2:
-                            if resp2.status >= 400:
-                                yield f"Error: YouTube 403 Forbidden even after retry.".encode()
-                                return
-                            # Success on retry!
-                            async for chunk in resp2.content.iter_chunked(1024 * 1024):
-                                yield chunk
-                            return
-
-                    if resp.status >= 400:
-                        yield f"Error: YouTube returned status {resp.status}".encode()
+                            if resp2.status < 400:
+                                async for chunk in resp2.content.iter_chunked(1024 * 1024): yield chunk
                         return
-                    
-                    async for chunk in resp.content.iter_chunked(1024 * 1024):
-                        yield chunk
+
+                    if resp.status < 400:
+                        async for chunk in resp.content.iter_chunked(1024 * 1024): yield chunk
             except Exception as e:
-                print(f"[Proxy Error] {e}")
-                yield f"Proxy Error: {str(e)}".encode()
+                print(f"[Proxy Stream Error] {e}")
 
-    media_type = "video/mp4"
-    if filename.endswith(".mp3"): media_type = "audio/mpeg"
-    elif filename.endswith(".m4a"): media_type = "audio/mp4"
-
+    media_type = "audio/mpeg" if safe_filename.endswith(".mp3") else "video/mp4"
     return StreamingResponse(
         stream_generator(),
         media_type=media_type,
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
             "Access-Control-Allow-Origin": "*",
             "Accept-Ranges": "bytes"
         }
