@@ -48,47 +48,37 @@ class YouTubeReverse:
 
     async def fetch_video_info(self, url):
         """
-        Races multiple reverse engines to get the fastest valid link.
+        Hyper-speed Resolution: Races ALL fast engines in parallel.
         """
-        # FASTEST engines (sequential or fast-fail)
-        fast_engines = [
-            self._engine_native,      # Directly from YouTube HTML (Reverse)
-            self._engine_savefrom,    # SaveFrom (Very fast scraper)
+        # Define the race group
+        fast_tasks = [
+            self._engine_native(url),
+            self._engine_piped(url),
+            self._engine_invidious(url),
+            self._engine_savefrom(url)
         ]
         
-        for engine in fast_engines:
-            try:
-                print(f"[*] Trying FAST engine: {engine.__name__}")
-                result = await engine(url)
-                if result and result.get("url"):
-                    return result
-            except: continue
-
-        # Parallel race for API Proxies (Piped/Invidious) - Speed boost
-        print("[*] Racing Proxy APIs (Piped/Invidious)...")
-        proxy_engines = [self._engine_piped(url), self._engine_invidious(url)]
-        for future in asyncio.as_completed(proxy_engines, timeout=10):
+        print(f"[*] Starting parallel race on {len(fast_tasks)} engines...")
+        
+        # Parallel race: First one to succeed wins
+        for future in asyncio.as_completed(fast_tasks, timeout=8):
             try:
                 result = await future
                 if result and result.get("url"):
+                    print(f"[Race] Winner: {result.get('engine', 'unknown')}")
                     return result
             except: continue
 
-        # HEAVY fallbacks (sequential)
-        heavy_engines = [
-            self._engine_ytdlp,       # Gold Standard
-            self._engine_selenium,    # Last Resort
-        ]
-        
+        # Heavy fallbacks (sequential)
+        print("[*] Fast engines failed. Starting heavy fallbacks...")
+        heavy_engines = [self._engine_ytdlp, self._engine_selenium]
         for engine in heavy_engines:
             try:
                 print(f"[*] Trying HEAVY engine: {engine.__name__}")
                 result = await engine(url)
                 if result and result.get("url"):
                     return result
-            except Exception as e:
-                print(f"[Reverse] {engine.__name__} failed: {e}")
-                continue
+            except: continue
                 
         return None
 
@@ -232,6 +222,8 @@ class YouTubeReverse:
                                         "url": best_f["url"],
                                         "thumbnail": thumb,
                                         "quality": f"{best_f.get('height', '720')}p",
+                                        "width": best_f.get("width"),
+                                        "height": best_f.get("height"),
                                         "engine": "native-reverse"
                                     }
                 except Exception as ex:
@@ -272,6 +264,8 @@ class YouTubeReverse:
                                     "url": best["url"],
                                     "thumbnail": data.get("thumbnailUrl"),
                                     "quality": best.get("quality", "720p"),
+                                    "width": best.get("width"),
+                                    "height": best.get("height"),
                                     "engine": "piped-api"
                                 }
                 except Exception as e:

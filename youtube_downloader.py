@@ -45,6 +45,8 @@ class YouTubeDownloader:
                     "thumbnail": media.get("thumbnail"),
                     "play": media.get("url"),
                     "quality": media.get("quality", "HD"),
+                    "width": media.get("width"),
+                    "height": media.get("height"),
                     "engine": media.get("engine")
                 }
         except: pass
