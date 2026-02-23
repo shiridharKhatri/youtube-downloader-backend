@@ -150,30 +150,66 @@ async def get_status():
 @app.get("/stream")
 async def stream_video(url: str, filename: Optional[str] = "video.mp4"):
     """
-    ULTRA-ROBUST Streaming using native proxying.
-    Bypasses all yt-dlp IP blocks.
+    Real-time Streaming with On-The-Fly Conversion (MP4/MP3).
+    Supports direct piping to avoid temp files.
     """
+    is_audio = filename.endswith(".mp3")
+    print(f"[*] Stream conversion requested: {'AUDIO' if is_audio else 'VIDEO'}")
+    
     # 1. Get the direct URL via reverse engine
     info = await downloader.get_media_info(url)
     if not info or not info.get("play"):
         raise HTTPException(status_code=404, detail="Could not retrieve stream URL")
     
     target_url = info["play"]
-    
-    async def stream_generator():
-        proxy = os.getenv("PROXY_URL")
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
-            try:
-                headers = {"User-Agent": USER_AGENT, "Range": "bytes=0-"}
-                async with session.get(target_url, headers=headers, proxy=proxy) as resp:
-                    async for chunk in resp.content.iter_chunked(1024 * 1024):
-                        yield chunk
-            except Exception as e:
-                print(f"[Streaming Error] {e}")
+    proxy = os.getenv("PROXY_URL")
 
+    async def stream_generator():
+        # Build FFmpeg command for on-the-fly streaming
+        if is_audio:
+            # Extract audio and convert to mp3
+            cmd = ["ffmpeg", "-i", "pipe:0", "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k", "-f", "mp3", "pipe:1"]
+        else:
+            # Remux to mp4 (faststart) for compatibility
+            cmd = ["ffmpeg", "-i", "pipe:0", "-c", "copy", "-movflags", "frag_keyframe+empty_moov+faststart", "-f", "mp4", "pipe:1"]
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL
+        )
+
+        async def writer():
+            try:
+                async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+                    async with session.get(target_url, headers={"User-Agent": USER_AGENT}, proxy=proxy) as resp:
+                        async for chunk in resp.content.iter_chunked(512 * 1024):
+                            process.stdin.write(chunk)
+                            await process.stdin.drain()
+                process.stdin.close()
+            except Exception as e:
+                print(f"[Stream Writer Error] {e}")
+                process.stdin.close()
+
+        # Start writer in background
+        writer_task = asyncio.create_task(writer())
+
+        try:
+            while True:
+                chunk = await process.stdout.read(1024 * 1024)
+                if not chunk: break
+                yield chunk
+        finally:
+            if process.returncode is None:
+                try: process.terminate()
+                except: pass
+            await writer_task
+
+    media_type = "audio/mpeg" if is_audio else "video/mp4"
     return StreamingResponse(
         stream_generator(),
-        media_type="video/mp4",
+        media_type=media_type,
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Access-Control-Allow-Origin": "*",
