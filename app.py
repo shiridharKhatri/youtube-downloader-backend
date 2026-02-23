@@ -80,22 +80,19 @@ async def run_download_task(task_id: str, url: str, type_str: str, itag: Optiona
                         else:
                             download_tasks[task_id]["progress"] = 50 # Indeterminate
 
-        download_tasks[task_id]["status"] = "processing"
-        
         # STEP 3: Post-processing (MP3 or MP4 check)
         import subprocess
+        print(f"[*] Post-processing: {type_str} (QuickTime compatibility fix)")
+        
         if type_str == "audio":
-            print(f"[*] Converting to MP3: {final_file}")
+            # High-quality MP3 conversion
             cmd = ["ffmpeg", "-y", "-i", out_file, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k", final_file]
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
-            # If it's already a good format, just rename, otherwise remux
-            if ext == "mp4":
-                os.rename(out_file, final_file)
-            else:
-                print(f"[*] Remuxing to MP4: {final_file}")
-                cmd = ["ffmpeg", "-y", "-i", out_file, "-c", "copy", final_file]
-                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # MP4 Remuxing with faststart for QuickTime/iPhone support
+            # This moves the MOOV atom to the front
+            cmd = ["ffmpeg", "-y", "-i", out_file, "-c", "copy", "-movflags", "faststart", final_file]
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # Cleanup raw file
         if os.path.exists(out_file): os.remove(out_file)
@@ -104,6 +101,7 @@ async def run_download_task(task_id: str, url: str, type_str: str, itag: Optiona
             raise Exception("Final file creation failed.")
 
         download_tasks[task_id]["status"] = "completed"
+        download_tasks[task_id]["progress"] = 100
         download_tasks[task_id]["file"] = final_file
     except Exception as e:
         import traceback
