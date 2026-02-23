@@ -52,52 +52,47 @@ async def run_download_task(task_id: str, url: str, type_str: str, itag: Optiona
         temp_dir = tempfile.gettempdir()
         final_file = os.path.join(temp_dir, f"{task_id}.{'mp3' if type_str == 'audio' else 'mp4'}")
 
-        print(f"[*] Starting streaming download: {play_url[:60]}...")
-        
-        # STEP 2: Use FFmpeg with a pipe for maximum speed and compatibility
-        import subprocess
-        
-        # Build FFmpeg command
-        if type_str == "audio":
-            # MP3 Conversion
-            cmd = ["ffmpeg", "-y", "-i", "pipe:0", "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k", final_file]
-        else:
-            # MP4 Remuxing with faststart (no transcoding for speed)
-            cmd = ["ffmpeg", "-y", "-i", "pipe:0", "-c", "copy", "-movflags", "faststart", final_file]
-
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL
-        )
-
-        # Download and pipe
+        # Download to raw temp file first (Avoids pipe errors and allows FFmpeg seeking)
+        raw_temp_file = os.path.join(temp_dir, f"raw-{task_id}")
         proxy = os.getenv("PROXY_URL")
+        
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
-            async with session.get(play_url, headers={"User-Agent": USER_AGENT}, proxy=proxy, timeout=300) as resp:
+            async with session.get(play_url, headers={"User-Agent": USER_AGENT}, proxy=proxy, timeout=600) as resp:
                 if resp.status >= 400:
                     raise Exception(f"YouTube stream error: {resp.status}")
                 
                 total_size = int(resp.headers.get('content-length', 0))
                 downloaded = 0
                 
-                async for chunk in resp.content.iter_chunked(512 * 1024):
-                    if not chunk: break
-                    process.stdin.write(chunk)
-                    await process.stdin.drain()
-                    downloaded += len(chunk)
-                    
-                    if total_size > 0:
-                        download_tasks[task_id]["progress"] = round((downloaded / total_size) * 100, 1)
-                    else:
-                        # Fallback progress for unknown size
-                        download_tasks[task_id]["progress"] = min(99, download_tasks[task_id].get("progress", 0) + 0.5)
+                with open(raw_temp_file, "wb") as f:
+                    async for chunk in resp.content.iter_chunked(1024 * 1024):
+                        if not chunk: break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            download_tasks[task_id]["progress"] = round((downloaded / total_size) * 80, 1) # 80% is download
 
-                process.stdin.close()
-                await process.wait()
+        # STEP 2: Use FFmpeg to process the downloaded file
+        print(f"[*] Processing with FFmpeg: {raw_temp_file}")
+        if type_str == "audio":
+            # MP3 Conversion
+            cmd = ["ffmpeg", "-y", "-i", raw_temp_file, "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k", final_file]
+        else:
+            # MP4 Remuxing with faststart (no transcoding for speed)
+            cmd = ["ffmpeg", "-y", "-i", raw_temp_file, "-c", "copy", "-movflags", "faststart", final_file]
 
-        if not os.path.exists(final_file) or os.path.getsize(final_file) < 1000:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL
+        )
+        await process.wait()
+        
+        # Cleanup raw file
+        try: os.unlink(raw_temp_file)
+        except: pass
+
+        if not os.path.exists(final_file) or os.path.getsize(final_file) < 500:
             raise Exception("Final file is missing or too small.")
 
         download_tasks[task_id]["status"] = "completed"
