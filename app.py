@@ -120,23 +120,28 @@ async def start_download(url: str, type: str = "video", itag: Optional[str] = No
 
 @app.get("/task-status/{task_id}")
 async def task_status(task_id: str):
-    task = download_tasks.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    try:
+        task = download_tasks.get(task_id)
+        if not task:
+            return JSONResponse(status_code=404, content={"status": "error", "error": "Task not found"})
+        return task
+    except Exception as e:
+        print(f"[Status Error] {e}")
+        return JSONResponse(status_code=500, content={"status": "error", "error": str(e)})
 
 @app.get("/download-file/{task_id}")
 async def fetch_download_file(task_id: str, filename: str = "video.mp4"):
     task = download_tasks.get(task_id)
     if not task or task["status"] != "completed" or not task["file"]:
-        raise HTTPException(status_code=404, detail="File not ready")
+        raise HTTPException(status_code=404, detail="File not ready or expired")
         
     path = task["file"]
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File vanished from server")
     
     media_type = "video/mp4"
     if filename.endswith(".mp3"): media_type = "audio/mpeg"
     
-    from fastapi.responses import FileResponse
     return FileResponse(path, media_type=media_type, filename=filename)
 
 @app.get("/status")
